@@ -18,7 +18,9 @@ except ImportError:
 app = Flask(__name__)
 CORS(app)
 
-OPENCLAW_WS    = os.getenv('OPENCLAW_WS_URL', 'ws://127.0.0.1:57627')
+# Proxy at 57627 is the only accessible WS endpoint (18789 is container-internal only)
+OPENCLAW_WS    = os.getenv('OPENCLAW_WS_URL',   'ws://127.0.0.1:57627')
+OPENCLAW_HTTP  = os.getenv('OPENCLAW_HTTP_URL', 'http://127.0.0.1:57627')
 OPENCLAW_TOKEN = os.getenv('OPENCLAW_TOKEN', '')
 DATA_FILE      = os.getenv('DATA_FILE', '/app/data.json')
 DEVICE_FILE    = os.getenv('DEVICE_FILE', '/app/state/device.json')
@@ -39,8 +41,8 @@ state = {
     'gateway':   'connecting',
     'device_id': None,
 }
-lock        = threading.Lock()
-sse_queues  = []
+lock       = threading.Lock()
+sse_queues = []
 
 
 # ── Device identity (Ed25519) ──
@@ -81,107 +83,143 @@ def broadcast(data):
             pass
 
 
-# ── OpenClaw WebSocket handlers ──
-_ws_use_device_auth = False   # set by ws_thread before connecting
+# ── OpenClaw WS protocol (gateway JSON-RPC format) ──
+
+def sign_and_connect(ws, nonce):
+    """Sign the challenge nonce and send the connect request frame."""
+    if not HAS_CRYPTO:
+        print("[WS] Cannot sign — cryptography not installed")
+        return
+    try:
+        dev = get_device()
+        signed_at_ms = int(time.time() * 1000)
+        client_id   = 'openclaw-control-ui'
+        client_mode = 'ui'
+        role        = 'operator'
+        scopes      = ['operator.admin', 'operator.approvals', 'operator.pairing']
+
+        # v2 payload — same format as the browser control-ui
+        payload_str = '|'.join([
+            'v2', dev['device_id'], client_id, client_mode, role,
+            ','.join(scopes), str(signed_at_ms), OPENCLAW_TOKEN, nonce,
+        ])
+
+        priv_bytes  = base64.b64decode(dev['private_key'])
+        private_key = Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        signature   = private_key.sign(payload_str.encode('utf-8'))
+        sig_b64url  = base64.urlsafe_b64encode(signature).rstrip(b'=').decode()
+
+        # Public key in URL-safe base64 without padding (matches paired.json)
+        pub_bytes   = base64.b64decode(dev['public_key'])
+        pub_b64url  = base64.urlsafe_b64encode(pub_bytes).rstrip(b'=').decode()
+
+        connect_req = {
+            'type':   'req',
+            'id':     str(uuid.uuid4()),
+            'method': 'connect',
+            'params': {
+                'minProtocol': 3,
+                'maxProtocol': 3,
+                'client': {
+                    'id':       client_id,
+                    'version':  '1.0.0',
+                    'platform': 'python',
+                    'mode':     client_mode,
+                },
+                'role':   role,
+                'scopes': scopes,
+                'device': {
+                    'id':        dev['device_id'],
+                    'publicKey': pub_b64url,
+                    'signature': sig_b64url,
+                    'signedAt':  signed_at_ms,
+                    'nonce':     nonce,
+                },
+                'auth': {'token': OPENCLAW_TOKEN},
+            }
+        }
+        ws.send(json.dumps(connect_req))
+        with lock:
+            state['device_id'] = dev['device_id']
+        print(f"[WS] Connect sent — device {dev['device_id'][:12]}…  nonce={nonce[:8]}…")
+    except Exception as e:
+        print(f"[WS] sign_and_connect failed: {e}")
+        import traceback; traceback.print_exc()
 
 
 def on_open(ws):
-    if _ws_use_device_auth:
-        # Bearer-token path: send device identity JSON
-        try:
-            dev = get_device()
-        except Exception as e:
-            print(f"[WS] on_open — get_device() FAILED: {e}")
-            import traceback; traceback.print_exc()
-            return
-
-        with lock:
-            state['gateway']   = 'authenticating'
-            state['device_id'] = dev['device_id']
-
-        auth = {
-            'type':  'auth',
-            'token': OPENCLAW_TOKEN,
-            'device': {
-                'id':        dev['device_id'],
-                'requestId': dev['request_id'],
-                'publicKey': dev['public_key'],
-                'platform':  'python',
-                'role':      'operator',
-            }
-        }
-        ws.send(json.dumps(auth))
-        print(f"[WS] Auth sent — device {dev['device_id'][:12]}… requestId={dev['request_id']}")
-        broadcast({'type': 'gateway_status', 'status': 'authenticating',
-                   'device_id': dev['device_id'], 'request_id': dev['request_id']})
-    else:
-        # Cookie-session path: already authenticated, just mark as online
-        print("[WS] Connected via session cookie — listening for events")
-        with lock:
-            state['gateway'] = 'online'
-        broadcast({'type': 'gateway_status', 'status': 'online'})
-
-
-def sign_challenge(ws, payload):
-    """Sign the nonce with our Ed25519 private key and send the response."""
-    nonce = payload.get('nonce', '')
-    try:
-        dev = get_device()
-        if not dev.get('private_key') or not HAS_CRYPTO:
-            print("[WS] Cannot sign challenge — no private key")
-            return
-        priv_bytes = base64.b64decode(dev['private_key'])
-        private_key = Ed25519PrivateKey.from_private_bytes(priv_bytes)
-        signature   = private_key.sign(nonce.encode('utf-8'))
-        sig_b64     = base64.b64encode(signature).decode()
-        response = {'type': 'connect.challenge.response', 'nonce': nonce, 'signature': sig_b64}
-        ws.send(json.dumps(response))
-        print(f"[WS] Challenge signed — nonce {nonce[:8]}…")
-    except Exception as e:
-        print(f"[WS] Challenge sign failed: {e}")
-        import traceback; traceback.print_exc()
+    print("[WS] Connected — waiting for connect.challenge")
+    with lock:
+        state['gateway'] = 'authenticating'
+    broadcast({'type': 'gateway_status', 'status': 'authenticating'})
 
 
 def on_message(ws, message):
     try:
-        ev = json.loads(message)
-        t  = ev.get('type', '')
-        ev_name = ev.get('event', '')
-        print(f"[WS] ← {t} {ev_name}")
+        ev      = json.loads(message)
+        ev_type = ev.get('type', '')
 
-        # ── Challenge-response (device identity) ──
-        if t == 'event' and ev_name == 'connect.challenge':
-            sign_challenge(ws, ev.get('payload', {}))
+        # ── Challenge: sign and send connect frame ──
+        if ev_type == 'event' and ev.get('event') == 'connect.challenge':
+            nonce = (ev.get('payload') or {}).get('nonce', '')
+            print(f"[WS] Challenge received — nonce {nonce[:8]}…")
+            sign_and_connect(ws, nonce)
             return
 
-        with lock:
-            if t in ('authenticated', 'paired', 'approved', 'connected', 'ready') \
-               or (t == 'event' and ev_name in ('connect.authenticated', 'connect.approved', 'connect.ready')):
-                state['gateway'] = 'online'
+        # ── Connect response (hello-ok) ──
+        if ev_type == 'res':
+            ok      = ev.get('ok', False)
+            payload = ev.get('payload') or {}
+            print(f"[WS] ← res ok={ok}")
+            if ok:
+                snapshot = payload.get('snapshot') or {}
+                health   = snapshot.get('health') or {}
+                agents   = health.get('agents', [])
+                with lock:
+                    state['gateway'] = 'online'
+                    if agents:
+                        state['agents'] = agents
                 broadcast({'type': 'gateway_status', 'status': 'online'})
-                print("[WS] Gateway ONLINE")
-
-            elif t == 'agents':
-                agents = ev.get('data', ev.get('agents', []))
                 if agents:
-                    state['agents'] = agents
                     broadcast({'type': 'agents', 'payload': agents})
-
-            elif t == 'agent_update':
-                for a in state['agents']:
-                    if a.get('name') == ev.get('name') or a.get('id') == ev.get('id'):
-                        a['status'] = ev.get('status', a['status'])
-                broadcast({'type': 'agent_update', 'payload': ev})
-
-            elif t == 'costs':
-                state['costs'].update(ev.get('data', ev))
-                broadcast({'type': 'costs', 'payload': state['costs']})
-
-            elif t == 'error':
-                print(f"[WS] OpenClaw error: {ev.get('message', ev)}")
-
+                print("[WS] Gateway ONLINE")
             else:
-                print(f"[WS] Unhandled event: {json.dumps(ev)[:300]}")
+                err = ev.get('error') or {}
+                print(f"[WS] Connect rejected: {err}")
+                with lock:
+                    state['gateway'] = 'error'
+                broadcast({'type': 'gateway_status', 'status': 'error'})
+            return
+
+        # ── Ongoing gateway events ──
+        if ev_type == 'event':
+            ev_name = ev.get('event', '')
+            payload = ev.get('payload') or {}
+            print(f"[WS] ← event {ev_name}")
+
+            with lock:
+                if ev_name == 'health':
+                    agents = payload.get('agents', [])
+                    if agents:
+                        state['agents'] = agents
+                    broadcast({'type': 'agents', 'payload': state['agents']})
+
+                elif ev_name == 'agent':
+                    agent_id = payload.get('id') or payload.get('name')
+                    for a in state['agents']:
+                        if a.get('id') == agent_id or a.get('name') == agent_id:
+                            if 'status' in payload:
+                                a['status'] = payload['status']
+                    broadcast({'type': 'agent_update', 'payload': payload})
+
+                elif ev_name in ('heartbeat', 'tick', 'presence', 'system-presence'):
+                    pass  # ignore
+
+                else:
+                    print(f"[WS] Unhandled event: {json.dumps(ev)[:300]}")
+            return
+
+        print(f"[WS] Unknown frame: {json.dumps(ev)[:200]}")
 
     except Exception as e:
         print(f"[WS] Parse error: {e} — raw: {message[:100]}")
@@ -201,17 +239,13 @@ def on_close(ws, code, msg):
     broadcast({'type': 'gateway_status', 'status': 'reconnecting'})
 
 
-def _http_base():
-    return OPENCLAW_WS.replace('ws://', 'http://').replace('wss://', 'https://')
-
-
+# ── HTTP helpers ──
 def wait_for_openclaw_ready(timeout=180):
     """Poll HTTP until OpenClaw shows the login page (not the startup screen)."""
-    base = _http_base()
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = req_lib.get(base, timeout=5, allow_redirects=False)
+            r = req_lib.get(OPENCLAW_HTTP, timeout=5, allow_redirects=False)
             if 'Welcome to OpenClaw' in r.text or r.status_code in (302, 301):
                 print("[WS] OpenClaw ready")
                 return True
@@ -228,17 +262,16 @@ def wait_for_openclaw_ready(timeout=180):
 
 def get_session_cookie():
     """POST /login with token and return the session Cookie header value."""
-    base = _http_base()
     try:
         r = req_lib.post(
-            f"{base.rstrip('/')}/login",
+            f"{OPENCLAW_HTTP.rstrip('/')}/login",
             data={'token': OPENCLAW_TOKEN},
             allow_redirects=False,
             timeout=5,
         )
         sid = r.cookies.get('connect.sid')
         if sid:
-            print(f"[WS] Session cookie obtained")
+            print("[WS] Session cookie obtained")
             return f'connect.sid={sid}'
         print(f"[WS] Login returned {r.status_code} but no cookie")
     except Exception as e:
@@ -250,15 +283,12 @@ def ws_thread():
     while True:
         wait_for_openclaw_ready()
 
-        global _ws_use_device_auth
         cookie = get_session_cookie()
         if cookie:
             headers = {'Cookie': cookie}
-            _ws_use_device_auth = False
             print(f"[WS] Connecting with session cookie to {OPENCLAW_WS}")
         else:
             headers = {'Authorization': f'Bearer {OPENCLAW_TOKEN}'}
-            _ws_use_device_auth = True
             print(f"[WS] Connecting with Bearer token to {OPENCLAW_WS}")
 
         try:
@@ -343,11 +373,11 @@ def stream():
     def generate():
         with lock:
             initial = {
-                'type':    'init',
-                'agents':  state['agents'],
-                'costs':   {**state['costs'], 'month': datetime.now().strftime('%B %Y')},
-                'org':     state['org'],
-                'gateway': state['gateway'],
+                'type':      'init',
+                'agents':    state['agents'],
+                'costs':     {**state['costs'], 'month': datetime.now().strftime('%B %Y')},
+                'org':       state['org'],
+                'gateway':   state['gateway'],
                 'device_id': state['device_id'],
             }
         yield f"data: {json.dumps(initial)}\n\n"
