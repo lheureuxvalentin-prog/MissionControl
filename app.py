@@ -20,7 +20,7 @@ def save_data(data):
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory('/app', 'index.html')
 
 @app.route('/api/agents')
 def agents():
@@ -32,7 +32,7 @@ def agents():
 
 @app.route('/api/costs')
 def costs():
-    return jsonify({"monthly_total": 47.83, "daily_spend": 12.15, "currency": "USD", "month": datetime.now().strftime("%B %Y")})
+    return jsonify({"monthly_total": 0.00, "daily_spend": 0.00, "currency": "USD", "month": datetime.now().strftime("%B %Y")})
 
 @app.route('/api/org')
 def org():
