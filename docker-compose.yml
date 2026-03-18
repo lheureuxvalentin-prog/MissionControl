@@ -1,9 +1,7 @@
-version: '3.8'
 services:
   mission-control:
     build: .
-    ports:
-      - "127.0.0.1:5001:5000"
+    network_mode: host
     volumes:
       - ./data.json:/app/data.json
       - ./device.json:/app/device.json

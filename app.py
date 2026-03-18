@@ -264,4 +264,5 @@ if __name__ == '__main__':
         print(f"[WS] Connecting to {OPENCLAW_WS}…")
     else:
         print("[WS] No OPENCLAW_TOKEN — running in static mode")
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    port = int(os.getenv('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, threaded=True)
