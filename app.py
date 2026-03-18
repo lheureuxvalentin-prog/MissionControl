@@ -82,12 +82,19 @@ def broadcast(data):
 
 # ── OpenClaw WebSocket handlers ──
 def on_open(ws):
-    dev = get_device()
-    with lock:
-        state['gateway']   = 'authenticating'
-        state['device_id'] = dev['device_id']
+    try:
+        dev = get_device()
+    except Exception as e:
+        print(f"[WS] on_open — get_device() FAILED: {e}")
+        import traceback; traceback.print_exc()
+        return
 
-    auth = {
+    try:
+        with lock:
+            state['gateway']   = 'authenticating'
+            state['device_id'] = dev['device_id']
+
+        auth = {
         'type':  'auth',
         'token': OPENCLAW_TOKEN,
         'device': {
@@ -98,11 +105,14 @@ def on_open(ws):
             'role':      'operator',
         }
     }
-    ws.send(json.dumps(auth))
-    print(f"[WS] Auth sent — device {dev['device_id'][:12]}…")
-    print(f"[WS] Approve with: openclaw devices approve {dev['request_id']}")
-    broadcast({'type': 'gateway_status', 'status': 'authenticating',
-               'device_id': dev['device_id'], 'request_id': dev['request_id']})
+        ws.send(json.dumps(auth))
+        print(f"[WS] Auth sent — device {dev['device_id'][:12]}…")
+        print(f"[WS] Approve with: openclaw devices approve {dev['request_id']}")
+        broadcast({'type': 'gateway_status', 'status': 'authenticating',
+                   'device_id': dev['device_id'], 'request_id': dev['request_id']})
+    except Exception as e:
+        print(f"[WS] on_open — send FAILED: {e}")
+        import traceback; traceback.print_exc()
 
 
 def on_message(ws, message):
@@ -159,6 +169,7 @@ def on_close(ws, code, msg):
 
 def ws_thread():
     while True:
+        print(f"[WS] Attempting connection to {OPENCLAW_WS}")
         try:
             ws = websocket.WebSocketApp(
                 OPENCLAW_WS,
@@ -167,11 +178,14 @@ def ws_thread():
                 on_error=on_error,
                 on_close=on_close,
             )
-            ws.run_forever(ping_interval=30, ping_timeout=10)
+            ret = ws.run_forever(ping_interval=30, ping_timeout=10)
+            print(f"[WS] run_forever returned: {ret}")
         except Exception as e:
             print(f"[WS] Connection failed: {e}")
+            import traceback; traceback.print_exc()
         with lock:
             state['gateway'] = 'reconnecting'
+        print("[WS] Reconnecting in 10s…")
         time.sleep(10)
 
 
