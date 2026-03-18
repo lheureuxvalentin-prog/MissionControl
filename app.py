@@ -82,10 +82,32 @@ def broadcast(data):
 
 # ── OpenClaw WebSocket handlers ──
 def on_open(ws):
-    print("[WS] Connected — listening for events")
+    try:
+        dev = get_device()
+    except Exception as e:
+        print(f"[WS] on_open — get_device() FAILED: {e}")
+        import traceback; traceback.print_exc()
+        return
+
     with lock:
-        state['gateway'] = 'online'
-    broadcast({'type': 'gateway_status', 'status': 'online'})
+        state['gateway']   = 'authenticating'
+        state['device_id'] = dev['device_id']
+
+    auth = {
+        'type':  'auth',
+        'token': OPENCLAW_TOKEN,
+        'device': {
+            'id':        dev['device_id'],
+            'requestId': dev['request_id'],
+            'publicKey': dev['public_key'],
+            'platform':  'python',
+            'role':      'operator',
+        }
+    }
+    ws.send(json.dumps(auth))
+    print(f"[WS] Auth sent — device {dev['device_id'][:12]}… requestId={dev['request_id']}")
+    broadcast({'type': 'gateway_status', 'status': 'authenticating',
+               'device_id': dev['device_id'], 'request_id': dev['request_id']})
 
 
 def sign_challenge(ws, payload):
@@ -171,13 +193,8 @@ def ws_thread():
     while True:
         print(f"[WS] Attempting connection to {OPENCLAW_WS}")
         try:
-            headers = {
-                'Authorization': f'Bearer {OPENCLAW_TOKEN}',
-                'X-Token': OPENCLAW_TOKEN,
-            }
             ws = websocket.WebSocketApp(
-                f"{OPENCLAW_WS}?token={OPENCLAW_TOKEN}",
-                header=headers,
+                OPENCLAW_WS,
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
