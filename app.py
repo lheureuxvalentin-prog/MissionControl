@@ -82,33 +82,44 @@ def broadcast(data):
 
 
 # ── OpenClaw WebSocket handlers ──
+_ws_use_device_auth = False   # set by ws_thread before connecting
+
+
 def on_open(ws):
-    try:
-        dev = get_device()
-    except Exception as e:
-        print(f"[WS] on_open — get_device() FAILED: {e}")
-        import traceback; traceback.print_exc()
-        return
+    if _ws_use_device_auth:
+        # Bearer-token path: send device identity JSON
+        try:
+            dev = get_device()
+        except Exception as e:
+            print(f"[WS] on_open — get_device() FAILED: {e}")
+            import traceback; traceback.print_exc()
+            return
 
-    with lock:
-        state['gateway']   = 'authenticating'
-        state['device_id'] = dev['device_id']
+        with lock:
+            state['gateway']   = 'authenticating'
+            state['device_id'] = dev['device_id']
 
-    auth = {
-        'type':  'auth',
-        'token': OPENCLAW_TOKEN,
-        'device': {
-            'id':        dev['device_id'],
-            'requestId': dev['request_id'],
-            'publicKey': dev['public_key'],
-            'platform':  'python',
-            'role':      'operator',
+        auth = {
+            'type':  'auth',
+            'token': OPENCLAW_TOKEN,
+            'device': {
+                'id':        dev['device_id'],
+                'requestId': dev['request_id'],
+                'publicKey': dev['public_key'],
+                'platform':  'python',
+                'role':      'operator',
+            }
         }
-    }
-    ws.send(json.dumps(auth))
-    print(f"[WS] Auth sent — device {dev['device_id'][:12]}… requestId={dev['request_id']}")
-    broadcast({'type': 'gateway_status', 'status': 'authenticating',
-               'device_id': dev['device_id'], 'request_id': dev['request_id']})
+        ws.send(json.dumps(auth))
+        print(f"[WS] Auth sent — device {dev['device_id'][:12]}… requestId={dev['request_id']}")
+        broadcast({'type': 'gateway_status', 'status': 'authenticating',
+                   'device_id': dev['device_id'], 'request_id': dev['request_id']})
+    else:
+        # Cookie-session path: already authenticated, just mark as online
+        print("[WS] Connected via session cookie — listening for events")
+        with lock:
+            state['gateway'] = 'online'
+        broadcast({'type': 'gateway_status', 'status': 'online'})
 
 
 def sign_challenge(ws, payload):
@@ -239,12 +250,15 @@ def ws_thread():
     while True:
         wait_for_openclaw_ready()
 
+        global _ws_use_device_auth
         cookie = get_session_cookie()
         if cookie:
             headers = {'Cookie': cookie}
+            _ws_use_device_auth = False
             print(f"[WS] Connecting with session cookie to {OPENCLAW_WS}")
         else:
             headers = {'Authorization': f'Bearer {OPENCLAW_TOKEN}'}
+            _ws_use_device_auth = True
             print(f"[WS] Connecting with Bearer token to {OPENCLAW_WS}")
 
         try:
