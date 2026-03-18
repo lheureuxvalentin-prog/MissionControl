@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  mission-control:
+    build: .
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./data.json:/app/data.json
+    restart: unless-stopped
