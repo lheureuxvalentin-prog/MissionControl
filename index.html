@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00d4ff;
+            --cyan-dim: #00d4ff40;
+            --purple: #9b59b6;
+            --green: #00ff88;
+            --dark: #0a0a0f;
+            --darker: #050508;
+            --panel: #0d0d15;
+            --border: #1a1a2e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--darker);
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: linear-gradient(var(--cyan-dim) 1px, transparent 1px),
+                              linear-gradient(90deg, var(--cyan-dim) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            opacity: 0.5;
+            animation: scan 4s linear infinite;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+        header { text-align: center; padding: 30px 0; }
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--cyan);
+            text-shadow: 0 0 20px var(--cyan), 0 0 40px var(--cyan);
+            letter-spacing: 8px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        @keyframes glow {
+            from { text-shadow: 0 0 20px var(--cyan), 0 0 40px var(--cyan); }
+            to { text-shadow: 0 0 30px var(--cyan), 0 0 60px var(--cyan), 0 0 80px var(--cyan); }
+        }
+        .subtitle { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; color: #666; margin-top: 10px; letter-spacing: 4px; }
+        .timestamp { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--cyan); margin-top: 5px; }
+        .corner-bracket { position: relative; padding: 15px 20px; display: inline-block; }
+        .corner-bracket::before, .corner-bracket::after {
+            content: ''; position: absolute; width: 20px; height: 20px; border: 2px solid var(--cyan);
+        }
+        .corner-bracket::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .corner-bracket::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+        .dashboard { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 30px; }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+        }
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--cyan);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel-title .icon { font-size: 1.3rem; }
+        .agent-list { display: flex; flex-direction: column; gap: 12px; }
+        .agent-card {
+            background: var(--dark);
+            border: 1px solid var(--border);
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+        .agent-card:hover { border-color: var(--cyan); box-shadow: 0 0 15px var(--cyan-dim); }
+        .agent-info { display: flex; align-items: center; gap: 15px; }
+        .agent-avatar {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.9rem;
+        }
+        .agent-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1rem; }
+        .agent-role { font-size: 0.75rem; color: #888; margin-top: 2px; }
+        .agent-tags { display: flex; gap: 5px; margin-top: 5px; }
+        .tag { font-size: 0.6rem; padding: 2px 8px; background: var(--border); border-radius: 3px; color: #888; }
+        .status {
+            font-family: 'Orbitron', sans-serif; font-size: 0.7rem;
+            padding: 5px 12px; border-radius: 3px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .status.online { background: #00ff8820; color: var(--green); border: 1px solid var(--green); }
+        .status.standby { background: #ffaa0020; color: #ffaa00; border: 1px solid #ffaa00; }
+        .status.offline { background: #ff444420; color: #ff4444; border: 1px solid #ff4444; }
+        .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .cost-card { background: var(--dark); border: 1px solid var(--border); padding: 20px; text-align: center; }
+        .cost-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .cost-value { font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 700; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .cost-period { font-size: 0.7rem; color: #666; margin-top: 5px; }
+        .org-container { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 30px 0; position: relative; }
+        .org-container::before { content: ''; position: absolute; top: 50%; left: 10%; right: 10%; height: 2px; background: var(--border); }
+        .org-agent { display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative; z-index: 1; }
+        .org-circle {
+            width: 80px; height: 80px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.9rem;
+            border: 3px solid; background: var(--dark);
+            transition: all 0.3s ease;
+        }
+        .org-agent:hover .org-circle { transform: scale(1.1); box-shadow: 0 0 30px currentColor; }
+        .org-name { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; }
+        .org-role { font-size: 0.65rem; color: #666; text-align: center; }
+        .org-note { position: absolute; bottom: -30px; font-size: 0.65rem; color: var(--purple); white-space: nowrap; }
+        .brief-list { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; }
+        .brief-card { background: var(--dark); border: 1px solid var(--border); padding: 15px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; }
+        .brief-card:hover { border-color: var(--cyan); }
+        .brief-info { flex: 1; }
+        .brief-title { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; font-weight: 700; color: #fff; }
+        .brief-date { font-size: 0.7rem; color: #666; margin-top: 3px; }
+        .brief-topics { display: flex; gap: 5px; margin-top: 8px; }
+        .topic { font-size: 0.6rem; padding: 2px 8px; background: var(--border); border-radius: 2px; color: var(--cyan); }
+        .brief-score { font-family: 'Orbitron', sans-serif; font-size: 1.5rem; font-weight: 900; color: var(--green); text-shadow: 0 0 10px var(--green); }
+        .brief-score span { font-size: 0.8rem; color: #666; }
+        .panel.full-width { grid-column: span 2; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--darker); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .panel.full-width { grid-column: span 1; }
+            h1 { font-size: 1.8rem; }
+            .org-container { flex-direction: column; gap: 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="corner-bracket">
+                <h1>MISSION CONTROL</h1>
+            </div>
+            <p class="subtitle">AGENT SYSTEM DASHBOARD</p>
+            <p class="timestamp" id="timestamp"></p>
+        </header>
+        <div class="dashboard">
+            <div class="panel">
+                <div class="panel-title"><span class="icon">◈</span> AGENT STATUS</div>
+                <div class="agent-list" id="agent-list"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-title"><span class="icon">◈</span> API COSTS</div>
+                <div class="cost-grid" id="cost-grid"></div>
+            </div>
+            <div class="panel full-width">
+                <div class="panel-title"><span class="icon">◈</span> ORG STRUCTURE</div>
+                <div class="org-container" id="org-container"></div>
+            </div>
+            <div class="panel full-width">
+                <div class="panel-title"><span class="icon">◈</span> BRIEF HISTORY</div>
+                <div class="brief-list" id="brief-list"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTimestamp() {
+            const now = new Date();
+            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Europe/Paris' };
+            document.getElementById('timestamp').textContent = now.toLocaleDateString('en-US', options) + ' • PARIS';
+        }
+        updateTimestamp();
+        setInterval(updateTimestamp, 10000);
+        async function fetchData() {
+            try {
+                const [agents, costs, org, briefs] = await Promise.all([
+                    fetch('/api/agents').then(r => r.json()),
+                    fetch('/api/costs').then(r => r.json()),
+                    fetch('/api/org').then(r => r.json()),
+                    fetch('/api/briefs').then(r => r.json())
+                ]);
+                renderAgents(agents);
+                renderCosts(costs);
+                renderOrg(org);
+                renderBriefs(briefs);
+            } catch (e) { console.error('Error fetching data:', e); }
+        }
+        function renderAgents(agents) {
+            const container = document.getElementById('agent-list');
+            container.innerHTML = agents.map(agent => `
+                <div class="agent-card">
+                    <div class="agent-info">
+                        <div class="agent-avatar" style="background: ${getAgentColor(agent.name)}20; border: 2px solid ${getAgentColor(agent.name)}; color: ${getAgentColor(agent.name)}">${agent.name.charAt(0)}</div>
+                        <div>
+                            <div class="agent-name">${agent.name}</div>
+                            <div class="agent-role">${agent.role}</div>
+                            <div class="agent-tags">${agent.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                        </div>
+                    </div>
+                    <span class="status ${agent.status}">${agent.status}</span>
+                </div>
+            `).join('');
+        }
+        function renderCosts(costs) {
+            const container = document.getElementById('cost-grid');
+            container.innerHTML = `
+                <div class="cost-card">
+                    <div class="cost-label">Monthly Total</div>
+                    <div class="cost-value">${costs.monthly_total}</div>
+                    <div class="cost-period">${costs.currency} • ${costs.month}</div>
+                </div>
+                <div class="cost-card">
+                    <div class="cost-label">Today's Spend</div>
+                    <div class="cost-value">${costs.daily_spend}</div>
+                    <div class="cost-period">${costs.currency}</div>
+                </div>
+            `;
+        }
+        function renderOrg(org) {
+            const container = document.getElementById('org-container');
+            container.innerHTML = org.agents.map(agent => `
+                <div class="org-agent">
+                    <div class="org-circle" style="color: ${agent.color}; border-color: ${agent.color}">${agent.name.charAt(0)}</div>
+                    <div class="org-name" style="color: ${agent.color}">${agent.name}</div>
+                    <div class="org-role">${agent.role}</div>
+                    ${agent.note ? `<div class="org-note">${agent.note}</div>` : ''}
+                </div>
+            `).join('');
+        }
+        function renderBriefs(briefs) {
+            const container = document.getElementById('brief-list');
+            if (!briefs.length) {
+                container.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">No briefs yet</div>';
+                return;
+            }
+            container.innerHTML = briefs.map(brief => `
+                <div class="brief-card">
+                    <div class="brief-info">
+                        <div class="brief-title">${brief.title || 'Brief'}</div>
+                        <div class="brief-date">${brief.date}</div>
+                        <div class="brief-topics">${(brief.topics || []).map(t => `<span class="topic">${t}</span>`).join('')}</div>
+                    </div>
+                    <div class="brief-score">${brief.score || '-'}<span>/10</span></div>
+                </div>
+            `).join('');
+        }
+        function getAgentColor(name) {
+            const colors = { 'Jarvis': '#9b59b6', 'Scout': '#00d4ff', 'Quill': '#00ff88' };
+            return colors[name] || '#00d4ff';
+        }
+        fetchData();
+        setInterval(fetchData, 10000);
+    </script>
+</body>
+</html>
