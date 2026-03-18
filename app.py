@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
 import websocket
+import requests as req_lib
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -189,13 +190,67 @@ def on_close(ws, code, msg):
     broadcast({'type': 'gateway_status', 'status': 'reconnecting'})
 
 
+def _http_base():
+    return OPENCLAW_WS.replace('ws://', 'http://').replace('wss://', 'https://')
+
+
+def wait_for_openclaw_ready(timeout=180):
+    """Poll HTTP until OpenClaw shows the login page (not the startup screen)."""
+    base = _http_base()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            r = req_lib.get(base, timeout=5, allow_redirects=False)
+            if 'Welcome to OpenClaw' in r.text or r.status_code in (302, 301):
+                print("[WS] OpenClaw ready")
+                return True
+            if 'Starting OpenClaw' in r.text:
+                print("[WS] OpenClaw still starting…")
+            else:
+                print(f"[WS] Unexpected response ({r.status_code}), waiting…")
+        except Exception as e:
+            print(f"[WS] Waiting for OpenClaw: {e}")
+        time.sleep(8)
+    print("[WS] OpenClaw did not become ready in time, attempting anyway")
+    return False
+
+
+def get_session_cookie():
+    """POST /login with token and return the session Cookie header value."""
+    base = _http_base()
+    try:
+        r = req_lib.post(
+            f"{base.rstrip('/')}/login",
+            data={'token': OPENCLAW_TOKEN},
+            allow_redirects=False,
+            timeout=5,
+        )
+        sid = r.cookies.get('connect.sid')
+        if sid:
+            print(f"[WS] Session cookie obtained")
+            return f'connect.sid={sid}'
+        print(f"[WS] Login returned {r.status_code} but no cookie")
+    except Exception as e:
+        print(f"[WS] Cookie login failed: {e}")
+    return None
+
+
 def ws_thread():
     while True:
-        print(f"[WS] Attempting connection to {OPENCLAW_WS}")
+        wait_for_openclaw_ready()
+
+        cookie = get_session_cookie()
+        if cookie:
+            headers = {'Cookie': cookie}
+            print(f"[WS] Connecting with session cookie to {OPENCLAW_WS}")
+        else:
+            headers = {'Authorization': f'Bearer {OPENCLAW_TOKEN}'}
+            print(f"[WS] Connecting with Bearer token to {OPENCLAW_WS}")
+
         try:
             ws = websocket.WebSocketApp(
                 OPENCLAW_WS,
-                header={'Authorization': f'Bearer {OPENCLAW_TOKEN}'},
+                header=headers,
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
@@ -208,8 +263,8 @@ def ws_thread():
             import traceback; traceback.print_exc()
         with lock:
             state['gateway'] = 'reconnecting'
-        print("[WS] Reconnecting in 10s…")
-        time.sleep(10)
+        print("[WS] Reconnecting in 30s…")
+        time.sleep(30)
 
 
 # ── Data helpers ──
