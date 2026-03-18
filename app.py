@@ -115,16 +115,44 @@ def on_open(ws):
         import traceback; traceback.print_exc()
 
 
+def sign_challenge(ws, payload):
+    """Sign the nonce with our Ed25519 private key and send the response."""
+    nonce = payload.get('nonce', '')
+    try:
+        dev = get_device()
+        if not dev.get('private_key') or not HAS_CRYPTO:
+            print("[WS] Cannot sign challenge — no private key")
+            return
+        priv_bytes = base64.b64decode(dev['private_key'])
+        private_key = Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        signature   = private_key.sign(nonce.encode('utf-8'))
+        sig_b64     = base64.b64encode(signature).decode()
+        response = {'type': 'connect.challenge.response', 'nonce': nonce, 'signature': sig_b64}
+        ws.send(json.dumps(response))
+        print(f"[WS] Challenge signed — nonce {nonce[:8]}…")
+    except Exception as e:
+        print(f"[WS] Challenge sign failed: {e}")
+        import traceback; traceback.print_exc()
+
+
 def on_message(ws, message):
     try:
         ev = json.loads(message)
         t  = ev.get('type', '')
-        print(f"[WS] ← {t}")
+        ev_name = ev.get('event', '')
+        print(f"[WS] ← {t} {ev_name}")
+
+        # ── Challenge-response (device identity) ──
+        if t == 'event' and ev_name == 'connect.challenge':
+            sign_challenge(ws, ev.get('payload', {}))
+            return
 
         with lock:
-            if t in ('authenticated', 'paired', 'approved', 'connected', 'ready'):
+            if t in ('authenticated', 'paired', 'approved', 'connected', 'ready') \
+               or (t == 'event' and ev_name in ('connect.authenticated', 'connect.approved', 'connect.ready')):
                 state['gateway'] = 'online'
                 broadcast({'type': 'gateway_status', 'status': 'online'})
+                print("[WS] Gateway ONLINE")
 
             elif t == 'agents':
                 agents = ev.get('data', ev.get('agents', []))
@@ -145,9 +173,8 @@ def on_message(ws, message):
             elif t == 'error':
                 print(f"[WS] OpenClaw error: {ev.get('message', ev)}")
 
-            # Log any unknown event for debugging
             else:
-                print(f"[WS] Unknown event: {json.dumps(ev)[:200]}")
+                print(f"[WS] Unhandled event: {json.dumps(ev)[:300]}")
 
     except Exception as e:
         print(f"[WS] Parse error: {e} — raw: {message[:100]}")
