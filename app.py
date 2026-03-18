@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import json
 import os
@@ -20,7 +20,7 @@ def save_data(data):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return send_from_directory('.', 'index.html')
 
 @app.route('/api/agents')
 def agents():
