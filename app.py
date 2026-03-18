@@ -178,8 +178,13 @@ def ws_thread():
     while True:
         print(f"[WS] Attempting connection to {OPENCLAW_WS}")
         try:
+            headers = {
+                'Authorization': f'Bearer {OPENCLAW_TOKEN}',
+                'X-Token': OPENCLAW_TOKEN,
+            }
             ws = websocket.WebSocketApp(
-                OPENCLAW_WS,
+                f"{OPENCLAW_WS}?token={OPENCLAW_TOKEN}",
+                header=headers,
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
