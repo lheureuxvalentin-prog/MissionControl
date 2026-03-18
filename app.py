@@ -342,8 +342,26 @@ def costs():
 
 @app.route('/api/org')
 def org():
+    # Build org dynamically from agents
+    colors = {'Jarvis': '#a855f7', 'Scout': '#00e5ff', 'Quill': '#00ff88'}
     with lock:
-        return jsonify(state['org'])
+        agents = state.get('agents', [])
+        if not agents:
+            agents = [
+                {'name': 'Jarvis', 'role': 'Chief of Staff'},
+                {'name': 'Scout', 'role': 'Intelligence Operator'},
+                {'name': 'Quill', 'role': 'Writer'},
+            ]
+        org_agents = []
+        for a in agents:
+            name = a.get('name', a.get('id', 'Unknown'))
+            org_agents.append({
+                'name': name,
+                'role': a.get('role', ''),
+                'color': colors.get(name, '#00e5ff'),
+                'note': 'Arbitrates when needed' if name == 'Jarvis' else ''
+            })
+        return jsonify({'agents': org_agents})
 
 @app.route('/api/gateway')
 def gateway():
