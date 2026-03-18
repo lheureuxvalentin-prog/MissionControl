@@ -1,4 +1,4 @@
-import os, json, threading, time, uuid, base64, queue
+import os, json, threading, time, uuid, base64, queue, hmac, hashlib, subprocess
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
@@ -397,6 +397,32 @@ def stream():
         mimetype='text/event-stream',
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
     )
+
+
+DEPLOY_SECRET = os.getenv('DEPLOY_SECRET', '')
+DEPLOY_DIR    = os.getenv('DEPLOY_DIR', '/app/repo')
+
+@app.route('/api/deploy', methods=['POST'])
+def webhook_deploy():
+    """GitHub Actions calls this with X-Deploy-Secret header to trigger git pull + restart."""
+    if not DEPLOY_SECRET:
+        return jsonify({'error': 'deploy not configured'}), 501
+    secret = request.headers.get('X-Deploy-Secret', '')
+    if not hmac.compare_digest(secret, DEPLOY_SECRET):
+        return jsonify({'error': 'unauthorized'}), 401
+
+    def run_deploy():
+        try:
+            result = subprocess.run(
+                ['bash', '-c', f'cd {DEPLOY_DIR} && git pull origin main && docker compose up --build -d'],
+                capture_output=True, text=True, timeout=300
+            )
+            print(f"[DEPLOY] exit={result.returncode}\n{result.stdout}\n{result.stderr}")
+        except Exception as e:
+            print(f"[DEPLOY] error: {e}")
+
+    threading.Thread(target=run_deploy, daemon=True).start()
+    return jsonify({'status': 'deploy started'}), 202
 
 
 if __name__ == '__main__':

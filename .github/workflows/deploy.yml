@@ -9,14 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 31.97.156.4
-          username: root
-          key: ${{ secrets.VPS_DEPLOY_KEY }}
-          script: |
-            cd /docker/openclaw-ixgy/data/.openclaw/workspace/MissionControl
-            git pull origin main
-            docker compose up --build -d
-            echo "Deploy complete"
+      - name: Trigger webhook deploy
+        run: |
+          curl -sf -X POST \
+            -H "X-Deploy-Secret: ${{ secrets.DEPLOY_SECRET }}" \
+            https://mc.srv1495549.hstgr.cloud/api/deploy
+          echo "Deploy triggered!"
