@@ -195,6 +195,7 @@ def ws_thread():
         try:
             ws = websocket.WebSocketApp(
                 OPENCLAW_WS,
+                header={'Authorization': f'Bearer {OPENCLAW_TOKEN}'},
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
