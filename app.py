@@ -44,8 +44,13 @@ sse_queues  = []
 
 # ── Device identity (Ed25519) ──
 def get_device():
-    if os.path.exists(DEVICE_FILE):
-        return json.load(open(DEVICE_FILE))
+    if os.path.exists(DEVICE_FILE) and os.path.isfile(DEVICE_FILE):
+        try:
+            content = open(DEVICE_FILE).read().strip()
+            if content:
+                return json.loads(content)
+        except Exception as e:
+            print(f"[DEVICE] Failed to read {DEVICE_FILE}: {e}")
 
     if HAS_CRYPTO:
         key  = Ed25519PrivateKey.generate()
