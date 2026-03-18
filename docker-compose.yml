@@ -4,6 +4,9 @@ services:
     network_mode: host
     volumes:
       - ./data.json:/app/data.json
-      - ./device.json:/app/device.json
+      - mc_state:/app/state
     env_file: .env
     restart: unless-stopped
+
+volumes:
+  mc_state:

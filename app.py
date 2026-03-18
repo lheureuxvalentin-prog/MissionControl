@@ -20,7 +20,7 @@ CORS(app)
 OPENCLAW_WS    = os.getenv('OPENCLAW_WS_URL', 'ws://127.0.0.1:57627')
 OPENCLAW_TOKEN = os.getenv('OPENCLAW_TOKEN', '')
 DATA_FILE      = os.getenv('DATA_FILE', '/app/data.json')
-DEVICE_FILE    = os.getenv('DEVICE_FILE', '/app/device.json')
+DEVICE_FILE    = os.getenv('DEVICE_FILE', '/app/state/device.json')
 
 # ── Fallback state (shown before OpenClaw connects) ──
 state = {
