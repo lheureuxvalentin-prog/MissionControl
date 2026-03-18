@@ -500,8 +500,12 @@
             <div class="sys-bar">
                 <div class="sys-item"><div class="dot green"></div> SYSTEM ONLINE</div>
                 <div class="sys-item"><div class="dot cyan"></div> 3 AGENTS LOADED</div>
-                <div class="sys-item"><div class="dot amber"></div> API CONNECTED</div>
+                <div class="sys-item"><div class="dot" id="gw-dot" style="background:#ffb700;box-shadow:0 0 6px #ffb700"></div> <span id="gw-label">GATEWAY CONNECTING</span></div>
                 <div class="sys-item"><div class="dot green"></div> MESH ACTIVE</div>
+            </div>
+            <div id="device-banner" style="display:none;margin-top:12px;background:#030e1c;border:1px solid #ffb700;padding:10px 20px;font-size:0.65rem;color:#ffb700;letter-spacing:1px;max-width:700px;margin-left:auto;margin-right:auto;">
+                ⚠ DEVICE APPROVAL REQUIRED — SSH into your VPS and run:<br>
+                <span id="device-cmd" style="color:#00e5ff;font-family:'JetBrains Mono',monospace;display:block;margin-top:6px;word-break:break-all"></span>
             </div>
         </header>
 
@@ -770,8 +774,66 @@
             }).join('');
         }
 
+        /* ── Gateway status ── */
+        function updateGateway(status, deviceId, requestId) {
+            const dot   = document.getElementById('gw-dot');
+            const label = document.getElementById('gw-label');
+            const banner = document.getElementById('device-banner');
+            const cmd    = document.getElementById('device-cmd');
+            const map = {
+                online:         { color: '#00ff88', text: 'GATEWAY ONLINE' },
+                authenticating: { color: '#00e5ff', text: 'AUTHENTICATING' },
+                reconnecting:   { color: '#ffb700', text: 'RECONNECTING' },
+                connecting:     { color: '#ffb700', text: 'GATEWAY CONNECTING' },
+                error:          { color: '#ff3d3d', text: 'GATEWAY ERROR' },
+                disconnected:   { color: '#ff3d3d', text: 'DISCONNECTED' },
+            };
+            const s = map[status] || { color: '#ffb700', text: status.toUpperCase() };
+            dot.style.background  = s.color;
+            dot.style.boxShadow   = `0 0 6px ${s.color}`;
+            label.textContent     = s.text;
+
+            if (status === 'authenticating' && requestId) {
+                banner.style.display = 'block';
+                cmd.textContent = `docker exec -e OPENCLAW_TOKEN=Brc7fwR3YtzZUvqhxtXPNvOwN7QfKI1d openclaw-ixgy-openclaw-1 openclaw devices approve ${requestId}`;
+            } else if (status === 'online') {
+                banner.style.display = 'none';
+            }
+        }
+
+        /* ── SSE real-time stream ── */
+        function connectSSE() {
+            const es = new EventSource('/api/stream');
+            es.onmessage = (e) => {
+                if (!e.data || e.data.startsWith(':')) return;
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d.type === 'init') {
+                        renderAgents(d.agents);
+                        renderCosts(d.costs);
+                        renderOrg(d.org);
+                        updateGateway(d.gateway, d.device_id);
+                    } else if (d.type === 'agents') {
+                        renderAgents(d.payload);
+                    } else if (d.type === 'agent_update') {
+                        fetch('/api/agents').then(r => r.json()).then(renderAgents);
+                    } else if (d.type === 'costs') {
+                        renderCosts(d.payload);
+                    } else if (d.type === 'new_brief') {
+                        fetch('/api/briefs').then(r => r.json()).then(renderBriefs);
+                    } else if (d.type === 'gateway_status') {
+                        updateGateway(d.status, d.device_id, d.request_id);
+                    }
+                } catch(err) { console.error('SSE parse error', err); }
+            };
+            es.onerror = () => {
+                es.close();
+                setTimeout(connectSSE, 5000);
+            };
+        }
+
         fetchAll();
-        setInterval(fetchAll, 10000);
+        connectSSE();
     </script>
 </body>
 </html>

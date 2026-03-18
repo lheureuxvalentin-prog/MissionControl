@@ -3,7 +3,9 @@ services:
   mission-control:
     build: .
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"
     volumes:
       - ./data.json:/app/data.json
+      - ./device.json:/app/device.json
+    env_file: .env
     restart: unless-stopped

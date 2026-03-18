@@ -1,0 +1,15 @@
+http:
+  routers:
+    mc-frontend:
+      rule: "Host(`mc.srv1495549.hstgr.cloud`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: mc-frontend
+
+  services:
+    mc-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:5001"
