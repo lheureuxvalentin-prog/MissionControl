@@ -82,17 +82,10 @@ def broadcast(data):
 
 # ── OpenClaw WebSocket handlers ──
 def on_open(ws):
-    try:
-        with lock:
-            state['gateway'] = 'authenticating'
-
-        auth = {'type': 'auth', 'token': OPENCLAW_TOKEN}
-        ws.send(json.dumps(auth))
-        print("[WS] Auth sent (token-only)")
-        broadcast({'type': 'gateway_status', 'status': 'authenticating'})
-    except Exception as e:
-        print(f"[WS] on_open — send FAILED: {e}")
-        import traceback; traceback.print_exc()
+    print("[WS] Connected — listening for events")
+    with lock:
+        state['gateway'] = 'online'
+    broadcast({'type': 'gateway_status', 'status': 'online'})
 
 
 def sign_challenge(ws, payload):
