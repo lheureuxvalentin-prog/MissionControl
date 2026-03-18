@@ -1,0 +1,24 @@
+name: Deploy MissionControl
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'MissionControl/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 31.97.156.4
+          username: root
+          key: ${{ secrets.VPS_DEPLOY_KEY }}
+          script: |
+            cd /docker/openclaw-ixgy/data/.openclaw/workspace/MissionControl
+            git pull origin main
+            docker compose up --build -d
+            echo "Deploy complete"
