@@ -83,33 +83,13 @@ def broadcast(data):
 # ── OpenClaw WebSocket handlers ──
 def on_open(ws):
     try:
-        dev = get_device()
-    except Exception as e:
-        print(f"[WS] on_open — get_device() FAILED: {e}")
-        import traceback; traceback.print_exc()
-        return
-
-    try:
         with lock:
-            state['gateway']   = 'authenticating'
-            state['device_id'] = dev['device_id']
+            state['gateway'] = 'authenticating'
 
-        auth = {
-        'type':  'auth',
-        'token': OPENCLAW_TOKEN,
-        'device': {
-            'id':        dev['device_id'],
-            'requestId': dev['request_id'],
-            'publicKey': dev['public_key'],
-            'platform':  'python',
-            'role':      'operator',
-        }
-    }
+        auth = {'type': 'auth', 'token': OPENCLAW_TOKEN}
         ws.send(json.dumps(auth))
-        print(f"[WS] Auth sent — device {dev['device_id'][:12]}…")
-        print(f"[WS] Approve with: openclaw devices approve {dev['request_id']}")
-        broadcast({'type': 'gateway_status', 'status': 'authenticating',
-                   'device_id': dev['device_id'], 'request_id': dev['request_id']})
+        print("[WS] Auth sent (token-only)")
+        broadcast({'type': 'gateway_status', 'status': 'authenticating'})
     except Exception as e:
         print(f"[WS] on_open — send FAILED: {e}")
         import traceback; traceback.print_exc()
