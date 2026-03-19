@@ -244,8 +244,32 @@ def on_message(ws, message):
                                 a['status'] = oc_status
                     broadcast({'type': 'agents', 'payload': state['agents']})
 
-                elif ev_name in ('heartbeat', 'tick', 'presence', 'system-presence'):
-                    pass  # ignore
+                elif ev_name == 'heartbeat':
+                    # Heartbeat responses from agents → save as briefs
+                    response = payload.get('response') or payload.get('text') or payload.get('message') or ''
+                    agent_name = payload.get('agentId') or payload.get('agent') or 'Agent'
+                    # Map agentId to display name
+                    cfg = AGENT_CONFIG.get(agent_name, {})
+                    display_name = cfg.get('name', agent_name)
+                    if response and response.strip() not in ('HEARTBEAT_OK', 'heartbeat_ok', ''):
+                        brief = {
+                            'title': f'{display_name} — Heartbeat',
+                            'body': response.strip(),
+                            'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            'topics': ['heartbeat', display_name.lower()],
+                            'agent': display_name,
+                        }
+                        data = load_data()
+                        data.setdefault('briefs', []).insert(0, brief)
+                        data['briefs'] = data['briefs'][:30]
+                        save_data(data)
+                        broadcast({'type': 'new_brief', 'payload': brief})
+                        print(f"[BRIEF] Heartbeat brief saved from {display_name}")
+                    else:
+                        print(f"[WS] Heartbeat: {json.dumps(payload)[:300]}")
+
+                elif ev_name in ('tick', 'presence', 'system-presence'):
+                    pass
 
                 else:
                     print(f"[WS] Unhandled event: {json.dumps(ev)[:300]}")

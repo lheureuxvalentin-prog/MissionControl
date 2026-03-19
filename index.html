@@ -17,13 +17,13 @@
             --green: #00ff88;
             --purple: #a855f7;
             --bg: #020a14;
-            --bg2: #03101e;
-            --panel: #030e1c;
-            --panel2: #041226;
-            --border: #0b2540;
-            --border-glow: #00e5ff30;
-            --text: #8ab8d8;
-            --text-dim: #3a6080;
+            --bg2: #04111f;
+            --panel: #050f1e;
+            --panel2: #061428;
+            --border: #0f2d4a;
+            --border-glow: #00e5ff35;
+            --text: #b8d8f0;
+            --text-dim: #6090b0;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -144,15 +144,15 @@
 
         .subtitle {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
             letter-spacing: 6px;
         }
 
         .timestamp {
-            font-size: 0.72rem;
+            font-size: 0.78rem;
             color: var(--cyan);
-            opacity: 0.65;
+            opacity: 0.8;
             margin-top: 6px;
             letter-spacing: 1px;
         }
@@ -164,8 +164,8 @@
             margin-top: 14px;
         }
         .sys-item {
-            font-size: 0.6rem;
-            color: var(--text-dim);
+            font-size: 0.7rem;
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 7px;
@@ -221,10 +221,10 @@
 
         .panel-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.72rem;
+            font-size: 0.82rem;
             font-weight: 700;
             color: var(--cyan);
-            margin-bottom: 18px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -288,42 +288,42 @@
         }
         @keyframes arot { to { transform: rotate(360deg); } }
 
-        .agent-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.9rem; }
-        .agent-role { font-size: 0.65rem; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
-        .agent-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+        .agent-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1rem; }
+        .agent-role { font-size: 0.75rem; color: var(--text-dim); margin-top: 3px; letter-spacing: 1px; }
+        .agent-tags { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
         .tag {
-            font-size: 0.52rem; padding: 2px 8px;
+            font-size: 0.65rem; padding: 3px 10px;
             background: var(--border);
             border: 1px solid var(--border-glow);
-            color: var(--text-dim);
-            letter-spacing: 1px;
+            color: var(--text);
+            letter-spacing: 0.5px;
             clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
         }
 
-        .status-hud { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+        .status-hud { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
         .status-badge {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.58rem;
-            padding: 4px 12px;
+            font-size: 0.65rem;
+            padding: 5px 14px;
             text-transform: uppercase;
             letter-spacing: 2px;
             clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
         }
-        .status-badge.online  { background: #00ff8812; color: var(--green); border: 1px solid var(--green); animation: sbglow 2s ease-in-out infinite alternate; }
-        .status-badge.standby { background: #ffb70012; color: var(--gold);  border: 1px solid var(--gold); }
-        .status-badge.offline { background: #ff3d3d12; color: var(--red);   border: 1px solid var(--red); }
+        .status-badge.online  { background: #00ff8818; color: var(--green); border: 1px solid var(--green); animation: sbglow 2s ease-in-out infinite alternate; }
+        .status-badge.standby { background: #ffb70018; color: var(--gold);  border: 1px solid var(--gold); }
+        .status-badge.offline { background: #ff3d3d18; color: var(--red);   border: 1px solid var(--red); }
         @keyframes sbglow {
             from { box-shadow: 0 0 4px #00ff8830; }
             to   { box-shadow: 0 0 12px #00ff8870; }
         }
         .status-sub {
-            font-size: 0.52rem;
+            font-size: 0.65rem;
             color: var(--text-dim);
             display: flex;
             align-items: center;
             gap: 5px;
         }
-        .status-sub .dot { width: 4px; height: 4px; }
+        .status-sub .dot { width: 5px; height: 5px; }
 
         /* ═══════════ COSTS ═══════════ */
         .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -342,7 +342,7 @@
             background: radial-gradient(circle at 50% 50%, var(--cyan-dim) 0%, transparent 70%);
         }
         .cost-label {
-            font-size: 0.58rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -366,7 +366,7 @@
             font-weight: 700;
         }
         .cost-period {
-            font-size: 0.58rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             margin-top: 8px;
         }
@@ -392,11 +392,12 @@
         .brief-card {
             background: var(--bg2);
             border: 1px solid var(--border);
-            border-left: 2px solid var(--gold);
-            padding: 14px 16px;
+            border-left: 3px solid var(--gold);
+            padding: 16px 20px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
+            gap: 16px;
             transition: all 0.25s ease;
             clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
             box-shadow: -2px 0 10px -4px var(--gold);
@@ -405,29 +406,41 @@
             border-color: var(--gold);
             box-shadow: -2px 0 10px -4px var(--gold), 0 0 18px var(--gold-dim), inset 0 0 12px var(--gold-dim);
         }
-        .brief-body { flex: 1; padding-left: 10px; }
+        .brief-body { flex: 1; }
         .brief-row {
             display: flex;
             align-items: baseline;
             gap: 12px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
         .brief-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 700;
-            color: #d8eeff;
+            color: #ddeeff;
         }
         .brief-date {
-            font-size: 0.6rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             margin-left: auto;
             white-space: nowrap;
+            flex-shrink: 0;
         }
-        .brief-topics { display: flex; gap: 5px; flex-wrap: wrap; }
+        .brief-text {
+            font-size: 0.82rem;
+            color: var(--text);
+            line-height: 1.6;
+            margin: 8px 0 10px;
+            max-height: 80px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .brief-topics { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
         .topic {
-            font-size: 0.52rem;
-            padding: 2px 8px;
+            font-size: 0.65rem;
+            padding: 3px 10px;
             background: var(--border);
             border: 1px solid var(--cyan-dim);
             color: var(--cyan);
@@ -441,7 +454,7 @@
             flex-direction: column;
             align-items: center;
             gap: 3px;
-            padding-left: 18px;
+            padding-left: 12px;
             flex-shrink: 0;
         }
         .score-ring-el { position: relative; width: 58px; height: 58px; }
@@ -456,13 +469,13 @@
             font-size: 1.05rem;
             font-weight: 900;
         }
-        .score-denom { font-size: 0.5rem; color: var(--text-dim); letter-spacing: 1px; }
+        .score-denom { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 1px; }
 
         .no-briefs {
             text-align: center;
             color: var(--text-dim);
             padding: 40px;
-            font-size: 0.75rem;
+            font-size: 0.82rem;
             letter-spacing: 2px;
         }
 
@@ -746,9 +759,9 @@
                 const s = b.score;
                 const hasScore = s != null && s !== '' && s !== '-';
                 const sc = scoreColor(s);
-                // Circumference of r=24 ≈ 150.8
                 const circ = 150.8;
                 const offset = hasScore ? circ * (1 - s / 10) : circ;
+                const bodyHtml = b.body ? `<div class="brief-text">${b.body.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : '';
                 return `
                 <div class="brief-card">
                     <div class="brief-body">
@@ -756,6 +769,7 @@
                             <div class="brief-title">${b.title || 'UNTITLED BRIEF'}</div>
                             <div class="brief-date">${b.date}</div>
                         </div>
+                        ${bodyHtml}
                         <div class="brief-topics">
                             ${(b.topics || []).map(t => `<span class="topic">${t}</span>`).join('')}
                         </div>
