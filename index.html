@@ -577,23 +577,26 @@
         /* ── Agents ── */
         function renderAgents(agents) {
             document.getElementById('agent-list').innerHTML = agents.map(a => {
-                const c = gc(a.name);
-                const dc = a.status === 'online' ? '#00ff88' : a.status === 'standby' ? '#ffb700' : '#ff3d3d';
+                const c = a.color || gc(a.name);
+                const st = a.status || 'standby';
+                const dc = st === 'online' ? '#00ff88' : st === 'standby' ? '#ffb700' : '#ff3d3d';
+                const tags = (a.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+                const sessions = a.sessions != null ? `<span class="tag" style="opacity:.6">${a.sessions} sessions</span>` : '';
                 return `
                 <div class="agent-card" style="--a-color:${c}">
                     <div class="agent-info">
-                        <div class="agent-avatar" style="background:${c}14;border:1.5px solid ${c};color:${c}">${a.name.charAt(0)}</div>
+                        <div class="agent-avatar" style="background:${c}14;border:1.5px solid ${c};color:${c}">${(a.name||'?').charAt(0)}</div>
                         <div>
-                            <div class="agent-name" style="color:${c}">${a.name}</div>
-                            <div class="agent-role">${a.role}</div>
-                            <div class="agent-tags">${a.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                            <div class="agent-name" style="color:${c}">${a.name||'Unknown'}</div>
+                            <div class="agent-role">${a.role||'Agent'}</div>
+                            <div class="agent-tags">${tags}${sessions}</div>
                         </div>
                     </div>
                     <div class="status-hud">
-                        <span class="status-badge ${a.status}">${a.status}</span>
+                        <span class="status-badge ${st}">${st}</span>
                         <div class="status-sub">
                             <div class="dot" style="background:${dc};box-shadow:0 0 5px ${dc}"></div>
-                            ${a.status.toUpperCase()}
+                            ${st.toUpperCase()}
                         </div>
                     </div>
                 </div>`;
@@ -815,8 +818,6 @@
                         updateGateway(d.gateway, d.device_id);
                     } else if (d.type === 'agents') {
                         renderAgents(d.payload);
-                    } else if (d.type === 'agent_update') {
-                        fetch('/api/agents').then(r => r.json()).then(renderAgents);
                     } else if (d.type === 'costs') {
                         renderCosts(d.payload);
                     } else if (d.type === 'new_brief') {

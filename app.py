@@ -25,12 +25,41 @@ OPENCLAW_TOKEN = os.getenv('OPENCLAW_TOKEN', '')
 DATA_FILE      = os.getenv('DATA_FILE', '/app/data.json')
 DEVICE_FILE    = os.getenv('DEVICE_FILE', '/app/state/device.json')
 
+# ── Static agent config (role / tags / color — enriches OpenClaw live data) ──
+AGENT_CONFIG = {
+    'main':  {'name': 'Jarvis', 'role': 'Chief of Staff',        'tags': ['coordination', 'arbitration'], 'color': '#a855f7'},
+    'scout': {'name': 'Scout',  'role': 'Intelligence Operator', 'tags': ['scanning', 'research'],        'color': '#00e5ff'},
+    'quill': {'name': 'Quill',  'role': 'Writer',                'tags': ['content', 'briefs'],           'color': '#00ff88'},
+}
+
+def normalize_agents(raw):
+    """Map OpenClaw agent objects → UI-ready format, merging static config."""
+    result = []
+    for a in raw:
+        agent_id = a.get('agentId') or a.get('id') or ''
+        cfg = AGENT_CONFIG.get(agent_id) or AGENT_CONFIG.get((a.get('name') or '').lower()) or {}
+        # Derive live status from OpenClaw fields
+        oc_status = a.get('status', '')
+        if not oc_status:
+            sessions = a.get('sessions') or {}
+            oc_status = 'online' if (sessions.get('count', 0) > 0) else 'standby'
+        result.append({
+            'name':    cfg.get('name', a.get('name', agent_id)),
+            'role':    cfg.get('role', 'Agent'),
+            'tags':    cfg.get('tags', []),
+            'color':   cfg.get('color', '#00e5ff'),
+            'status':  oc_status,
+            'agentId': agent_id,
+            'sessions': (a.get('sessions') or {}).get('count', 0),
+        })
+    return result
+
 # ── Fallback state (shown before OpenClaw connects) ──
 state = {
     'agents': [
-        {'name': 'Jarvis', 'role': 'Chief of Staff',        'status': 'standby', 'tags': ['coordination', 'arbitration']},
-        {'name': 'Scout',  'role': 'Intelligence Operator', 'status': 'standby', 'tags': ['scanning', 'research']},
-        {'name': 'Quill',  'role': 'Writer',                'status': 'standby', 'tags': ['content', 'briefs']},
+        {'name': 'Jarvis', 'role': 'Chief of Staff',        'status': 'standby', 'tags': ['coordination', 'arbitration'], 'color': '#a855f7', 'sessions': 0},
+        {'name': 'Scout',  'role': 'Intelligence Operator', 'status': 'standby', 'tags': ['scanning', 'research'],        'color': '#00e5ff', 'sessions': 0},
+        {'name': 'Quill',  'role': 'Writer',                'status': 'standby', 'tags': ['content', 'briefs'],           'color': '#00ff88', 'sessions': 0},
     ],
     'costs': {'monthly_total': 0.0, 'daily_spend': 0.0, 'currency': 'USD', 'month': ''},
     'org': {'agents': [
@@ -175,13 +204,14 @@ def on_message(ws, message):
                 snapshot = payload.get('snapshot') or {}
                 health   = snapshot.get('health') or {}
                 agents   = health.get('agents', [])
+                normalized = normalize_agents(agents) if agents else []
                 with lock:
                     state['gateway'] = 'online'
-                    if agents:
-                        state['agents'] = agents
+                    if normalized:
+                        state['agents'] = normalized
                 broadcast({'type': 'gateway_status', 'status': 'online'})
-                if agents:
-                    broadcast({'type': 'agents', 'payload': agents})
+                if normalized:
+                    broadcast({'type': 'agents', 'payload': normalized})
                 print("[WS] Gateway ONLINE")
             else:
                 err = ev.get('error') or {}
@@ -201,16 +231,18 @@ def on_message(ws, message):
                 if ev_name == 'health':
                     agents = payload.get('agents', [])
                     if agents:
-                        state['agents'] = agents
+                        state['agents'] = normalize_agents(agents)
                     broadcast({'type': 'agents', 'payload': state['agents']})
 
                 elif ev_name == 'agent':
-                    agent_id = payload.get('id') or payload.get('name')
+                    # Patch live status into matching agent card
+                    agent_id = payload.get('agentId') or payload.get('id') or payload.get('name')
+                    oc_status = payload.get('status', '')
                     for a in state['agents']:
-                        if a.get('id') == agent_id or a.get('name') == agent_id:
-                            if 'status' in payload:
-                                a['status'] = payload['status']
-                    broadcast({'type': 'agent_update', 'payload': payload})
+                        if a.get('agentId') == agent_id or a.get('name') == agent_id:
+                            if oc_status:
+                                a['status'] = oc_status
+                    broadcast({'type': 'agents', 'payload': state['agents']})
 
                 elif ev_name in ('heartbeat', 'tick', 'presence', 'system-presence'):
                     pass  # ignore
@@ -277,6 +309,22 @@ def get_session_cookie():
     except Exception as e:
         print(f"[WS] Cookie login failed: {e}")
     return None
+
+
+def cost_poll_thread():
+    """Poll OpenClaw HTTP for usage/cost data every 5 minutes."""
+    while True:
+        time.sleep(300)
+        try:
+            r = req_lib.get(f"{OPENCLAW_HTTP.rstrip('/')}/api/usage", timeout=8)
+            if r.status_code == 200:
+                data = r.json()
+                with lock:
+                    state['costs']['monthly_total'] = data.get('totalCost', data.get('monthly_total', 0.0))
+                    state['costs']['daily_spend']   = data.get('dailyCost',  data.get('daily_spend',   0.0))
+                broadcast({'type': 'costs', 'payload': dict(state['costs'])})
+        except Exception:
+            pass  # costs are best-effort
 
 
 def ws_thread():
@@ -446,6 +494,7 @@ def webhook_deploy():
 if __name__ == '__main__':
     if OPENCLAW_TOKEN:
         threading.Thread(target=ws_thread, daemon=True).start()
+        threading.Thread(target=cost_poll_thread, daemon=True).start()
         print(f"[WS] Connecting to {OPENCLAW_WS}…")
     else:
         print("[WS] No OPENCLAW_TOKEN — running in static mode")
